@@ -22,6 +22,7 @@ void usage(void)
 	fprintf(stderr, "usage: %s [OPTIONS] <device>\n\n"
 		"  -h, --help           Display this help output\n"
 		"  -m, --markbad        Mark blocks bad if they appear so\n"
+		"  -n, --noprogress     Do not show progress\n"
 		"  -s, --seed           Supply random seed\n"
 		"  -p, --passes         Number of passes\n"
 		"  -o, --offset         Start offset on flash\n"
@@ -36,6 +37,7 @@ struct mtd_ecc_stats oldstats, newstats;
 int fd;
 int markbad=0;
 int seed;
+int progress=1;
 
 int erase_and_write(loff_t ofs, unsigned char *data, unsigned char *rbuf)
 {
@@ -43,7 +45,7 @@ int erase_and_write(loff_t ofs, unsigned char *data, unsigned char *rbuf)
 	ssize_t len;
 	int i;
 
-	printf("\r%08x: erasing... ", (unsigned)ofs);
+	progress && printf("\r%08x: erasing... ", (unsigned)ofs);
 	fflush(stdout);
 
 	er.start = ofs;
@@ -58,7 +60,7 @@ int erase_and_write(loff_t ofs, unsigned char *data, unsigned char *rbuf)
 		return 1;
 	}
 
-	printf("\r%08x: writing...", (unsigned)ofs);
+	progress && printf("\r%08x: writing...", (unsigned)ofs);
 	fflush(stdout);
 
 	len = pwrite(fd, data, meminfo.erasesize, ofs);
@@ -77,7 +79,7 @@ int erase_and_write(loff_t ofs, unsigned char *data, unsigned char *rbuf)
 		exit(1);
 	}
 
-	printf("\r%08x: reading...", (unsigned)ofs);
+	progress && printf("\r%08x: reading...", (unsigned)ofs);
 	fflush(stdout);
 
 	len = pread(fd, rbuf, meminfo.erasesize, ofs);
@@ -98,6 +100,7 @@ int erase_and_write(loff_t ofs, unsigned char *data, unsigned char *rbuf)
 	}
 
 	if (newstats.corrected > oldstats.corrected) {
+		progress &&
 		printf("\n %d bit(s) ECC corrected at %08x\n",
 				newstats.corrected - oldstats.corrected,
 				(unsigned) ofs);
@@ -110,7 +113,7 @@ int erase_and_write(loff_t ofs, unsigned char *data, unsigned char *rbuf)
 	if (len < meminfo.erasesize)
 		exit(1);
 
-	printf("\r%08x: checking...", (unsigned)ofs);
+	progress && printf("\r%08x: checking...", (unsigned)ofs);
 	fflush(stdout);
 
 	if (memcmp(data, rbuf, meminfo.erasesize)) {
@@ -143,10 +146,11 @@ int main(int argc, char **argv)
 	seed = time(NULL);
 
 	for (;;) {
-		static const char *short_options="hkl:mo:p:s:";
+		static const char *short_options="hknl:mo:p:s:";
 		static const struct option long_options[] = {
 			{ "help", no_argument, 0, 'h' },
 			{ "markbad", no_argument, 0, 'm' },
+			{ "noprogress", no_argument, 0, 'n' },
 			{ "seed", required_argument, 0, 's' },
 			{ "passes", required_argument, 0, 'p' },
 			{ "offset", required_argument, 0, 'o' },
@@ -167,6 +171,10 @@ int main(int argc, char **argv)
 
 		case 'm':
 			markbad = 1;
+			break;
+
+		case 'n':
+			progress = 0;
 			break;
 
 		case 'k':
@@ -240,10 +248,12 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
-	printf("ECC corrections: %d\n", oldstats.corrected);
-	printf("ECC failures   : %d\n", oldstats.failed);
-	printf("Bad blocks     : %d\n", oldstats.badblocks);
-	printf("BBT blocks     : %d\n", oldstats.bbtblocks);
+	if (0) {
+		printf("ECC corrections: %d\n", oldstats.corrected);
+		printf("ECC failures   : %d\n", oldstats.failed);
+		printf("Bad blocks     : %d\n", oldstats.badblocks);
+		printf("BBT blocks     : %d\n", oldstats.bbtblocks);
+	}
 
 	srand(seed);
 
@@ -265,7 +275,7 @@ int main(int argc, char **argv)
 				wbuf[i] = rand();
 
 			if (keep_contents) {
-				printf("\r%08x: reading... ", (unsigned)test_ofs);
+				progress && printf("\r%08x: reading... ", (unsigned)test_ofs);
 				fflush(stdout);
 
 				len = pread(fd, kbuf, meminfo.erasesize, test_ofs);
@@ -283,8 +293,13 @@ int main(int argc, char **argv)
 			if (keep_contents)
 				erase_and_write(test_ofs, kbuf, rbuf);
 		}
-		printf("\nFinished pass %d successfully\n", pass+1);
+		progress && printf("\nFinished pass %d successfully\n", pass+1);
 	}
+
+	printf("ECC corrections: %d\n", oldstats.corrected);
+	printf("ECC failures   : %d\n", oldstats.failed);
+	printf("Bad blocks     : %d\n", oldstats.badblocks);
+	printf("BBT blocks     : %d\n", oldstats.bbtblocks);
 	/* Return happy */
 	return 0;
 }
