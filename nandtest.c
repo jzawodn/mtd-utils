@@ -248,7 +248,7 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
-	if (0) {
+	if (!progress) {
 		printf("ECC corrections: %d\n", oldstats.corrected);
 		printf("ECC failures   : %d\n", oldstats.failed);
 		printf("Bad blocks     : %d\n", oldstats.badblocks);
